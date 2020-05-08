@@ -10,6 +10,7 @@ import {BranchBanner} from './BranchBanner'
 import CombatantLookupRedirect from './CombatantLookupRedirect'
 import ErrorBoundary from './ErrorBoundary'
 import Find from './Find'
+import GCDSummary from './GCDSummary'
 import GlobalSidebar from './GlobalSidebar'
 import Home from './Home'
 import LastFightRedirect from './LastFightRedirect'
@@ -112,6 +113,7 @@ class App extends Component {
 							<Route path="/:section/:code/last/:combatant*" component={LastFightRedirect}/>
 							<Route path="/lookup/:code/:fight/:job/:name" component={CombatantLookupRedirect}/>
 							<Route path="/find/:code/:fight?" component={Find}/>
+							<Route path="/analyse/:code/:fight/gcd" component={GCDSummary}/>
 							<Route path="/analyse/:code/:fight/:combatant" component={Analyse}/>
 						</Switch>
 					</ErrorBoundary>
