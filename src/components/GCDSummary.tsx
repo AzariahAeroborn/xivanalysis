@@ -14,6 +14,12 @@ import {GameEdition} from '../data/PATCHES'
 import {Patch} from 'parser/core/Patch'
 
 const FFLOGS_ACTORID_OFFSET = 999999
+const BASE_GCD_RECAST = 2.5
+const CASTER_TAX_MILLIS = 100
+
+function notUndefined<TValue>(value: TValue | null | undefined): value is TValue {
+	return value != null
+}
 
 interface FetchEventParams {
 	report: PossiblyLoadedReport | undefined,
@@ -26,10 +32,37 @@ interface ActorEvents {
 	histogram: any,
 }
 
-interface GCDAction {
-	action: Action,
-	start?: number,
-	cast?: number,
+class GCDAction {
+	action: Action
+	begincast: number | undefined
+	cast: number | undefined
+
+	constructor(gcd: {
+		action: Action,
+		begincast?: number,
+		cast?: number,
+	}) {
+		this.action = gcd.action
+		this.begincast = gcd.begincast
+		this.cast = gcd.cast
+	}
+
+	get isInterrupted() {
+		return this.begincast != null && this.cast == null
+	}
+
+	get isInstant() {
+		return this.cast != null && this.begincast == null
+	}
+
+	get isCasterTaxed() {
+		return !this.isInstant && this.action.castTime && this.action.castTime >= BASE_GCD_RECAST
+	}
+
+	get startTime() {
+		if (this.isInterrupted) { return undefined }
+		return this.begincast ?? this.cast
+	}
 }
 
 interface GCDHistogram {
@@ -179,15 +212,17 @@ export default class GCDSummary extends Component<any, any> {
 		const gcdActions = this.buildGCDActions(events)
 		const gcdIntervals = gcdActions.map((action, idx) => {
 			if (idx > 1) {
-				const actionStart = action.start ?? action.cast
-				const lastActionStart = gcdActions[idx-1].start ?? gcdActions[idx-1].cast
-				if (actionStart && lastActionStart) {
-					return actionStart - lastActionStart
+				const lastAction = gcdActions[idx-1]
+				if (action.startTime && lastAction.startTime) {
+					let interval = action.startTime - lastAction.startTime
+					if (lastAction.isCasterTaxed) {
+						interval -= CASTER_TAX_MILLIS
+					}
+					return interval
 				}
 			}
-		}).filter(interval => interval != null)
+		}).filter(notUndefined)
 
-		// @ts-ignore
 		// tslint:disable-next-line:no-magic-numbers
 		const histogram = _.countBy(gcdIntervals, interval => Math.round(interval / 10) * 10)
 		const gcdHistogram: GCDHistogram[] = []
@@ -213,7 +248,7 @@ export default class GCDSummary extends Component<any, any> {
 			if (i === 0 && event.type === 'cast' && (action?.castTime ?? 0 > 0)) { continue }
 
 			if (event.type === 'begincast') {
-				gcds.push({start: event.timestamp, action})
+				gcds.push(new GCDAction({begincast: event.timestamp, action}))
 			} else if (event.type === 'cast') {
 				// Check if this was completing a begincast event
 				const lastAction = _.last(gcds)
@@ -221,7 +256,7 @@ export default class GCDSummary extends Component<any, any> {
 					lastAction.cast = event.timestamp
 				} else {
 					// Otherwise this is an instant cast
-					gcds.push({cast: event.timestamp, action})
+					gcds.push(new GCDAction({cast: event.timestamp, action}))
 				}
 			}
 		}
