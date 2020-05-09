@@ -20,6 +20,8 @@ export interface Action {
 	statusesApplied?: Array<keyof StatusRoot>
 	charges?: number
 	mpCost?: number
+	gcdRecast?: number
+	ignoresSpeed?: boolean
 	// TODO: Do I need this still?
 	// [key: string]: unknown
 }

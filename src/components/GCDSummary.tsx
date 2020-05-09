@@ -3,8 +3,8 @@ import React, {Component} from 'react'
 import {disposeOnUnmount, observer} from 'mobx-react'
 import {observable, reaction, runInAction} from 'mobx'
 import {getFflogsEvents} from '../api'
-import {Actor, CastEvent} from '../fflogs'
-import {PossiblyLoadedReport, Report} from 'store/report'
+import {Actor} from '../fflogs'
+import {PossiblyLoadedReport} from 'store/report'
 import {Event} from '../events'
 import {StoreContext} from '../store'
 import {getDataBy} from 'data'
@@ -14,8 +14,8 @@ import {GameEdition} from '../data/PATCHES'
 import {Patch} from 'parser/core/Patch'
 
 const FFLOGS_ACTORID_OFFSET = 999999
-const BASE_GCD_RECAST = 2.5
 const CASTER_TAX_MILLIS = 100
+const BASE_GCD = 2.5
 
 function notUndefined<TValue>(value: TValue | null | undefined): value is TValue {
 	return value != null
@@ -56,7 +56,21 @@ class GCDAction {
 	}
 
 	get isCasterTaxed() {
-		return !this.isInstant && this.action.castTime && this.action.castTime >= BASE_GCD_RECAST
+		return !this.isInstant && this.action.castTime && this.action.cooldown && this.action.castTime >= this.action.cooldown
+	}
+
+	get actionCooldown() {
+		return this.action.gcdRecast ?? this.action.cooldown
+	}
+
+	get actionCastTime() {
+		return this.isInstant ? 0 : this.action.castTime
+	}
+
+	get recastNormaliseFactor() {
+		if (this.actionCooldown == null) { return 1 }
+		if (this.actionCastTime == null) { return 1 }
+		return Math.max(this.actionCastTime, this.actionCooldown) / BASE_GCD
 	}
 
 	get startTime() {
@@ -211,15 +225,16 @@ export default class GCDSummary extends Component<any, any> {
 
 		const gcdActions = this.buildGCDActions(events)
 		const gcdIntervals = gcdActions.map((action, idx) => {
-			if (idx > 1) {
-				const lastAction = gcdActions[idx-1]
-				if (action.startTime && lastAction.startTime) {
-					let interval = action.startTime - lastAction.startTime
-					if (lastAction.isCasterTaxed) {
-						interval -= CASTER_TAX_MILLIS
-					}
-					return interval
+			// ignore actions that are not influenced by speed stat
+			if (action.action.ignoresSpeed) { return }
+
+			const nextGCDstart = gcdActions[idx+1]?.startTime
+			if (action.startTime && nextGCDstart) {
+				let interval = nextGCDstart - action.startTime
+				if (action.isCasterTaxed) {
+					interval -= CASTER_TAX_MILLIS
 				}
+				return interval / action.recastNormaliseFactor
 			}
 		}).filter(notUndefined)
 

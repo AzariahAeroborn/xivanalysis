@@ -115,6 +115,7 @@ export const PLD = ensureActions({
 		castTime: 1.5,
 		breaksCombo: true,
 		potency: 350,
+		ignoresSpeed: true,
 	},
 	HOLY_CIRCLE: {
 		id: 16458,
@@ -140,6 +141,7 @@ export const PLD = ensureActions({
 		onGcd: true,
 		breaksCombo: true,
 		potency: 800,
+		ignoresSpeed: true,
 	},
 
 	// -----
